@@ -10,9 +10,7 @@ from torchvision.datasets import MNIST
 from torch.utils.data import DataLoader, ConcatDataset
 from torchvision import transforms
 
-import evaluate
-import models
-import train
+from src import evaluate, models, train
 
 
 def load_mnist():
@@ -31,9 +29,7 @@ if __name__ == '__main__':
     k_folds = 5
     num_epochs = 1
     loss_function = nn.CrossEntropyLoss()
-
-    # For fold results
-    results = {}
+    model_name = 'simple-convnet-mnist'
 
     # Set fixed random number seed
     torch.manual_seed(42)
@@ -45,6 +41,9 @@ if __name__ == '__main__':
 
     # Start print
     print('--------------------------------')
+
+    # Dictionary of metrics for each fold, keyed by fold number
+    metrics = {}
 
     # K-fold Cross Validation model evaluation
     for fold, (train_ids, test_ids) in enumerate(kfold.split(dataset)):
@@ -69,14 +68,14 @@ if __name__ == '__main__':
         # Initialize optimizer
         optimizer = torch.optim.Adam(network.parameters(), lr=1e-4)
 
-        # Losses, dice scores, hausdorff scores
-        metrics = train.train_model(trainloader, network, loss_function, optimizer, num_epochs)
+        # Nested dictionary of losses, dice scores, hausdorff scores
+        metrics[fold] = train.train_model(network, trainloader, num_epochs, loss_function, optimizer)
 
         # Process is complete.
         print('Training process has finished. Saving trained model.')
 
         # Saving the model
-        save_path = f'./model-fold-{fold + 1}.pth'
+        save_path = f'./models/{model_name}-fold-{fold + 1}.pth'
         torch.save(network.state_dict(), save_path)
 
         # Print about testing
@@ -85,17 +84,27 @@ if __name__ == '__main__':
         correct, total = evaluate.evaluate_model(testloader, network)
 
         # Print accuracy
-        print('Accuracy for fold %d: %d %%' % (fold, 100.0 * correct / total))
+        acc = 100.0 * correct / total
+        print('Accuracy for fold %d: %d %%' % (fold + 1, acc))
         print('--------------------------------')
-        results[fold] = 100.0 * (correct / total)
+        metrics[fold]['accuracy'] = acc
 
     # Print fold results
     print(f'K-FOLD CROSS VALIDATION RESULTS FOR {k_folds} FOLDS')
     print('--------------------------------')
-    sum = 0.0
-    for key, value in results.items():
-        print(f'Fold {key}: {value} %')
-        sum += value
-    print(f'Average: {sum/len(results.items())} %')
+    summed_acc = 0.0
+    best_acc = 0.0
+    best_fold = 0
+    for fold_num, values in metrics.items():
+        acc = values['accuracy']
+        print(f'Fold {fold_num + 1}: {acc:.3f}%')
+        summed_acc += acc
+        if acc > best_acc:
+            best_acc = acc
+            best_fold = fold_num + 1
 
-    print("Best performing model is from fold: " % max(results, key=results.get))
+    print(f'Average: {summed_acc/len(metrics.items()):.3f}%')
+
+    print(best_fold)
+    print(type(best_fold))
+    print(f"Best performing model is from fold: {best_fold}")

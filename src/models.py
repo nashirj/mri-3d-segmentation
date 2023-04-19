@@ -1,9 +1,7 @@
 import torch.nn as nn
 
 class SimpleConvNet(nn.Module):
-    '''
-        Simple Convolutional Neural Network
-    '''
+    '''Simple Convolutional Neural Network.'''
     def __init__(self):
         super().__init__()
         self.layers = nn.Sequential(
@@ -23,11 +21,8 @@ class SimpleConvNet(nn.Module):
 
 
 def reset_weights(m):
-    '''
-        Try resetting model weights to avoid
-        weight leakage.
-    '''
+    '''Try resetting model weights to avoid weight leakage.'''
     for layer in m.children():
-    if hasattr(layer, 'reset_parameters'):
-        print(f'Reset trainable parameters of layer = {layer}')
-        layer.reset_parameters()
+        if hasattr(layer, 'reset_parameters'):
+            # print(f'Reset trainable parameters of layer = {layer}')
+            layer.reset_parameters()

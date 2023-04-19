@@ -1,6 +1,6 @@
 """Helper file for training related functions."""
 
-def train_clf(network, trainloader, num_epochs, loss_function, optimizer):
+def train_model(network, trainloader, num_epochs, loss_function, optimizer):
     losses = []
     # TODO(): Update this to calculate dice and hd score
     dice_scores = []
@@ -40,7 +40,12 @@ def train_clf(network, trainloader, num_epochs, loss_function, optimizer):
                 print('Loss after mini-batch %5d: %.3f' %
                     (i + 1, current_loss / 500))
                 current_loss = 0.0
+
         # TODO(): Compute scores here after each epoch
         # dice_scores.append(dice_score)
         # hd_scores.append(hd_score)
-    return losses, dice_scores, hd_scores
+    return {
+        'losses': losses,
+        'dice_scores': dice_scores,
+        'hd_scores': hd_scores
+    }
