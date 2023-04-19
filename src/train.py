@@ -1,4 +1,8 @@
 """Helper file for training related functions."""
+from sklearn.model_selection import KFold
+import torch
+
+from src import evaluate, models
 
 def train_model(network, trainloader, num_epochs, loss_function, optimizer):
     losses = []
@@ -49,3 +53,60 @@ def train_model(network, trainloader, num_epochs, loss_function, optimizer):
         'dice_scores': dice_scores,
         'hd_scores': hd_scores
     }
+
+def train_kfold(dataset, k_folds, num_epochs, batch_size, loss_function,
+                optimizer_type, model_name, model_type, lr):
+    """Five fold cross validation"""
+    kfold = KFold(n_splits=k_folds, shuffle=True)
+
+    # Start print
+    print('--------------------------------')
+
+    # Dictionary of metrics for each fold, keyed by fold number
+    metrics = {}
+
+    # K-fold Cross Validation model evaluation
+    for fold, (train_ids, test_ids) in enumerate(kfold.split(dataset)):
+        # Print
+        print(f'Training model on FOLD {fold + 1}/{k_folds}')
+        print('--------------------------------')
+
+        # Sample elements randomly from a given list of ids, no replacement.
+        train_subsampler = torch.utils.data.SubsetRandomSampler(train_ids)
+        test_subsampler = torch.utils.data.SubsetRandomSampler(test_ids)
+
+        # Define data loaders for training and testing data in this fold
+        trainloader = torch.utils.data.DataLoader(
+            dataset, batch_size=batch_size, sampler=train_subsampler)
+        testloader = torch.utils.data.DataLoader(
+            dataset, batch_size=batch_size, sampler=test_subsampler)
+
+        # Init the neural network, train one per fold
+        network = model_type()
+        network.apply(models.reset_weights)
+
+        # Initialize optimizer
+        optimizer = optimizer_type(network.parameters(), lr=lr)
+
+        # Nested dictionary of losses, dice scores, hausdorff scores
+        metrics[fold] = train_model(network, trainloader, num_epochs, loss_function, optimizer)
+
+        # Process is complete.
+        print('Training process has finished. Saving trained model.')
+
+        # Saving the model
+        save_path = f'./models/{model_name}-fold-{fold + 1}.pth'
+        torch.save(network.state_dict(), save_path)
+
+        # Print about testing
+        print('Starting testing')
+
+        correct, total = evaluate.evaluate_model(testloader, network)
+
+        # Print accuracy
+        acc = 100.0 * correct / total
+        print('Accuracy for fold %d: %d %%' % (fold + 1, acc))
+        print('--------------------------------')
+        metrics[fold]['accuracy'] = acc
+    
+    return metrics
