@@ -3,9 +3,11 @@ import numpy as np
 
 from src import constants
 
+
 def normalize_img(data):
     data_min = np.min(data)
     return (data - data_min) / (np.max(data) - data_min)
+
 
 def get_masks(mask):
     # Copied from https://www.kaggle.com/code/asmahekal/brain-tumor-mri-segmentation
@@ -28,9 +30,15 @@ def get_masks(mask):
     mask_ET[mask_ET == constants.ENHANCING] = 1
 
     mask = np.stack([mask_WT, mask_TC, mask_ET])
-    # mask = np.moveaxis(mask, (0, 1, 2, 3), (0, 3, 2, 1))
 
     return mask
+
+
+def binarize_mask(mask, threshold=0.5):
+    mask[mask > threshold] = 1
+    mask[mask <= threshold] = 0
+    return mask.astype(np.uint8)
+
 
 def load_stacked_mri_img(path):
     """Returns a 4D numpy array with shape [4, 240, 240, 155].
@@ -42,9 +50,11 @@ def load_stacked_mri_img(path):
     test_image = np.transpose(test_image, (3, 0, 1, 2))
     return test_image
 
+
 def split_mri_img(img):
     # Channel order: FLAIR, T1_W, T1_GD, T2_W
     return [img[i, :, :, :] for i in range(4)]
+
 
 def load_mask(path):
     return nib.load(path).get_fdata().astype(np.uint8)
