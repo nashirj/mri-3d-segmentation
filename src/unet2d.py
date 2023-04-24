@@ -529,6 +529,23 @@ class UNet(nn.Module):
         return f"{d}"
 
 
+def create_2d_unet():
+    in_channels = 4
+    out_channels = 3
+
+    return UNet(
+        in_channels=in_channels,
+        out_channels=out_channels,
+        n_blocks=4,
+        start_filters=32,
+        activation=ActivationFunction.RELU,
+        normalization=NormalizationLayer.BATCH,
+        conv_mode=ConvMode.SAME,
+        dim=Dimensions.TWO,
+        up_mode=UpMode.TRANSPOSED,
+    )
+
+
 if __name__ == "__main__":
     in_channels = 4
     out_channels = 3

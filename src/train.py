@@ -5,7 +5,7 @@ from sklearn.model_selection import KFold
 import torch
 
 from src import evaluate, losses, dataset
-from src.unet2d import UNet, ActivationFunction, NormalizationLayer, ConvMode, Dimensions, UpMode
+from src.unet2d import UNet, ActivationFunction, NormalizationLayer, ConvMode, Dimensions, UpMode, create_2d_unet
 
 
 # def train_3d_model(model, trainloader, num_epochs, loss_function, optimizer, device='cpu'):
@@ -252,26 +252,10 @@ def train_2d_model(model, trainloader, num_epochs, loss_function, optimizer, lr_
         'hd_scores_full': hd_scores_full
     }
 
-def create_2d_unet():
-    in_channels = 4
-    out_channels = 3
-
-    return UNet(
-        in_channels=in_channels,
-        out_channels=out_channels,
-        n_blocks=4,
-        start_filters=32,
-        activation=ActivationFunction.RELU,
-        normalization=NormalizationLayer.BATCH,
-        conv_mode=ConvMode.SAME,
-        dim=Dimensions.TWO,
-        up_mode=UpMode.TRANSPOSED,
-    )
-
 def train_kfold(dataset, k_folds, num_epochs, batch_size, loss_function,
                 optimizer_type, create_model_fn, model_name, lr, device='cpu'):
     """Five fold cross validation"""
-    kfold = KFold(n_splits=k_folds, shuffle=True)
+    kfold = KFold(n_splits=k_folds, shuffle=True, random_state=86)
 
     # Start print
     print('--------------------------------')
@@ -327,8 +311,6 @@ def train_kfold(dataset, k_folds, num_epochs, batch_size, loss_function,
 
 
 if __name__ == '__main__':
-    model = create_2d_unet()
-
     # param_size = 0
     # for param in model.parameters():
     #     param_size += param.nelement() * param.element_size()
@@ -355,7 +337,7 @@ if __name__ == '__main__':
     print(device)
 
     metrics = train_kfold(dataset, k_folds, num_epochs, batch_size,
-                          loss_function, optimizer_type, create_2d_unet,
+                          loss_function, optimizer_type, unet2d.create_2d_unet,
                           model_name, lr, device)
 
     # create json object from dictionary
