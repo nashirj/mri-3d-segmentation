@@ -10,7 +10,7 @@ def normalize_img(data):
 
 
 def get_masks(mask):
-    # Copied from https://www.kaggle.com/code/asmahekal/brain-tumor-mri-segmentation
+    # Adapted from https://www.kaggle.com/code/asmahekal/brain-tumor-mri-segmentation
     # WT = Whole tumor
     mask_WT = mask.copy()
     mask_WT[mask_WT == constants.EDEMA] = 1

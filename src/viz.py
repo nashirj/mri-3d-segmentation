@@ -4,21 +4,27 @@ import numpy as np
 
 from src import constants
 
-def show_kfold_loss_plots(metrics):
-    stacked_losses = np.vstack([np.array(v['losses']) for k, v in metrics.items()])
-    mean = np.mean(stacked_losses, axis=0)
-    std = np.std(stacked_losses, axis=0)
-    mins = np.min(stacked_losses, axis=0)
-    maxs = np.max(stacked_losses, axis=0)
+def show_kfold_plots(stacked_values, val_type='loss'):
+
+    mean = np.mean(stacked_values, axis=0)
+    std = np.std(stacked_values, axis=0)
 
     # Plot using std for error bars
     iterations = [i + 1 for i, _ in enumerate(mean)]
-    fig, ax = plt.subplots()
-    ax.set_title('Average loss with std. dev for all folds')
-    ax.plot(iterations, mean)
-    ax.fill_between(iterations, mean - std, mean + std, alpha=0.3)
-    ax.set_xlabel('Iterations (slice number)')
-    ax.set_ylabel('Loss')
+    fig, ax = plt.subplots(1, 2, figsize=(10, 5))
+    ax[0].set_title(f'Average {val_type} with std. dev for all folds')
+    ax[0].plot(iterations, mean)
+    ax[0].fill_between(iterations, mean - std, mean + std, alpha=0.3)
+    ax[0].set_xlabel('Image number (one epoch))')
+    ax[0].set_ylabel(f'Average {val_type}')
+    # Show overlain instead of averaged
+    ax[1].set_title('Loss for all folds')
+    for fold, _ in enumerate(stacked_values):
+        ax[1].plot(iterations, stacked_values[fold], label=f'Fold {fold+1}')
+    ax[1].set_xlabel('Image number (one epoch)')
+    ax[1].set_ylabel('Average loss')
+    ax[1].legend()
+    plt.suptitle('Loss for all folds, each value is average over all slices of image i')
     plt.show()
 
     # # Plot using min and max for error bars
@@ -103,14 +109,14 @@ def show_aggregate_masks(aggregate_masks, slice_idx, orig_mask):
     # Show perspective 3 with WT, ET, TC
     fig, ax = plt.subplots(nrows=1, ncols=4, figsize=(15, 15))
 
-    ax[0].set_title(constants.AGGREGATE_MASKS[constants.ET])
-    show_mask(aggregate_masks[constants.ET, :, :, slice_idx], ax[0], label_name=constants.AGGREGATE_MASKS[constants.ET])
+    ax[0].set_title(constants.AGGREGATE_MASK_TYPES[constants.ET])
+    show_mask(aggregate_masks[constants.ET, :, :, slice_idx], ax[0], label_name=constants.AGGREGATE_MASK_TYPES[constants.ET])
 
-    ax[1].set_title(constants.AGGREGATE_MASKS[constants.TC])
-    show_mask(aggregate_masks[constants.TC, :, :, slice_idx], ax[1], label_name=constants.AGGREGATE_MASKS[constants.TC])
+    ax[1].set_title(constants.AGGREGATE_MASK_TYPES[constants.TC])
+    show_mask(aggregate_masks[constants.TC, :, :, slice_idx], ax[1], label_name=constants.AGGREGATE_MASK_TYPES[constants.TC])
 
-    ax[2].set_title(constants.AGGREGATE_MASKS[constants.WT])
-    show_mask(aggregate_masks[constants.WT, :, :, slice_idx], ax[2], label_name=constants.AGGREGATE_MASKS[constants.WT])
+    ax[2].set_title(constants.AGGREGATE_MASK_TYPES[constants.WT])
+    show_mask(aggregate_masks[constants.WT, :, :, slice_idx], ax[2], label_name=constants.AGGREGATE_MASK_TYPES[constants.WT])
 
     ax[3].set_title('Original mask')
     show_mask(orig_mask[:, :, slice_idx], ax[3])
@@ -123,9 +129,25 @@ if __name__ == '__main__':
     with open('metrics/unet2d.json', 'r') as f:
         unet2d_metrics = json.load(f)
     
-    print(unet2d_metrics)
 
-    # show_segmentation_metrics(unet2d_metrics)
+    min_loss_len = min([len(v['losses']) for fold, v in unet2d_metrics.items()])
+    min_dice_len = min([len(v['dice_scores']) for fold, v in unet2d_metrics.items()])
+    min_hd_len = min([len(v['hd_scores']) for fold, v in unet2d_metrics.items()])
+    min_hd_full_len = min([len(v['hd_scores_full']) for fold, v in unet2d_metrics.items()])
 
-    show_kfold_loss_plots(unet2d_metrics)
-    show_kfold_dice_plots(unet2d_metrics)
+    # Truncate all lists to min length
+    for fold, v in unet2d_metrics.items():
+        v['losses'] = v['losses'][:min_loss_len]
+        v['dice_scores'] = v['dice_scores'][:min_dice_len]
+        v['hd_scores'] = v['hd_scores'][:min_hd_len]
+        v['hd_scores_full'] = v['hd_scores_full'][:min_hd_full_len]
+
+    # Convert string key to int key
+    metrics = {int(k): v for k, v in unet2d_metrics.items()}
+
+    # Compute average loss per image for each fold. Each list corresponds to one image
+    stacked_losses = np.vstack([np.mean(np.array(v['losses']), axis=1) for _, v in metrics.items()])
+    show_kfold_plots(stacked_losses)
+
+    stacked_dice = np.vstack([np.mean(np.array(v['dice_scores']), axis=1) for _, v in metrics.items()])
+    show_kfold_plots(stacked_dice, 'dice')
