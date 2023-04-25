@@ -519,14 +519,14 @@ class UNet(nn.Module):
 
         return x
 
-    def __repr__(self):
-        attributes = {
-            attr_key: self.__dict__[attr_key]
-            for attr_key in self.__dict__.keys()
-            if "_" not in attr_key[0] and "training" not in attr_key
-        }
-        d = {self.__class__.__name__: attributes}
-        return f"{d}"
+    # def __repr__(self):
+    #     attributes = {
+    #         attr_key: self.__dict__[attr_key]
+    #         for attr_key in self.__dict__.keys()
+    #         if "_" not in attr_key[0] and "training" not in attr_key
+    #     }
+    #     d = {self.__class__.__name__: attributes}
+    #     return f"{d}"
 
 
 def create_2d_unet():

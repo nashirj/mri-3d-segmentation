@@ -175,14 +175,9 @@ def train_2d_model(model, trainloader, num_epochs, loss_function, optimizer, lr_
 
         # Iterate over the DataLoader for training data
         for i, data in enumerate(trainloader, 0):
-            # Get inputs
-            inputs, targets = data[0].float(), data[1].float()
-            inputs, targets = inputs.to(device), targets.to(device)
+            inputs, targets = data[0].to(device), data[1].to(device)
 
             assert inputs.shape[0] == 1, "Batch size must be 1 for 2D training"
-            # Squeeze to get rid of singleton dimension
-            inputs = inputs.squeeze(0)
-            targets = targets.squeeze(0)
 
             img_loss = []
             img_dice = []
@@ -191,14 +186,10 @@ def train_2d_model(model, trainloader, num_epochs, loss_function, optimizer, lr_
             # Uses num nonzero elements when one of the masks is empty
             img_hd_full = []
             # Iterate over each slice of the input and target
-            for j in range(inputs.shape[3]):
+            for j in range(inputs.shape[4]):
                 # Get the current slice
-                input_slice = inputs[:, :, :, j]
-                target_slice = targets[:, :, :, j]
-
-                # Add singleton dimension
-                input_slice = input_slice.unsqueeze(0)
-                target_slice = target_slice.unsqueeze(0)
+                input_slice = inputs[:, :, :, :, j]
+                target_slice = targets[:, :, :, :, j]
 
                 # Zero the gradients
                 optimizer.zero_grad()
@@ -243,13 +234,17 @@ def train_2d_model(model, trainloader, num_epochs, loss_function, optimizer, lr_
             hd_scores.append(img_hd)
             hd_scores_full.append(img_hd_full)
 
+            # Cut down on training time
+            if i == 200:
+                break
+
         print(f"finished epoch {epoch+1} of {num_epochs}")
         print()
     return {
-        'losses': losses,
-        'dice_scores': dice_scores,
-        'hd_scores': hd_scores,
-        'hd_scores_full': hd_scores_full
+        'tr_losses': losses,
+        'tr_dice_scores': dice_scores,
+        'tr_hd_scores': hd_scores,
+        'tr_hd_scores_full': hd_scores_full
     }
 
 def train_kfold(dataset, k_folds, num_epochs, batch_size, loss_function,
@@ -281,32 +276,33 @@ def train_kfold(dataset, k_folds, num_epochs, batch_size, loss_function,
 
         # Init the model, train one per fold
         model = create_model_fn()
+        model = model.to(device)
 
         # Initialize optimizer
         optimizer = optimizer_type(model.parameters(), lr=lr)
         lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
 
         # Nested dictionary of losses, dice scores, hausdorff scores
-        metrics[fold] = train_2d_model(model, trainloader, num_epochs, loss_function, optimizer, lr_scheduler, device)
+        train_metrics = train_2d_model(model, trainloader, num_epochs, loss_function, optimizer, lr_scheduler, device)
 
         # Process is complete.
         print('Training process has finished. Saving trained model.')
 
-        # Saving the model
-        save_path = f'./models/{model_name}-fold-{fold + 1}.pth'
+        # Saving the model and metrics
+        save_path = f'./models/third-run-unet2d/{model_name}-fold-{fold + 1}.pth'
         torch.save(model.state_dict(), save_path)
 
         # Print about testing
         print('Starting testing')
 
-        # correct, total = evaluate.evaluate_model(testloader, model)
+        test_metrics = evaluate.evaluate_model(model, testloader, device)
 
-        # # Print accuracy
-        # acc = 100.0 * correct / total
-        # print('Accuracy for fold %d: %d %%' % (fold + 1, acc))
-        # print('--------------------------------')
-        # metrics[fold]['accuracy'] = acc
-    
+        metrics[fold] = train_metrics | test_metrics
+
+        # Save metrics for each fold as we train
+        with open(f'./metrics/{model_name}-fold-{fold + 1}.json', 'w') as f:
+            json.dump(metrics[fold], f)
+
     return metrics
 
 
@@ -330,14 +326,14 @@ if __name__ == '__main__':
     loss_function = losses.BCEDiceLoss(alpha=1, beta=1)
     optimizer_type = torch.optim.Adam
     model_name = 'unet2d'
-    lr = 1e-4
+    lr = 0.02
     dataset = dataset.load_brats()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     print(device)
 
     metrics = train_kfold(dataset, k_folds, num_epochs, batch_size,
-                          loss_function, optimizer_type, unet2d.create_2d_unet,
+                          loss_function, optimizer_type, create_2d_unet,
                           model_name, lr, device)
 
     # create json object from dictionary

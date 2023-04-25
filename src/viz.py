@@ -18,13 +18,20 @@ def show_kfold_plots(stacked_values, val_type='loss'):
     ax[0].set_xlabel('Image number (one epoch))')
     ax[0].set_ylabel(f'Average {val_type}')
     # Show overlain instead of averaged
-    ax[1].set_title('Loss for all folds')
+    ax[1].set_title(f'{val_type} for all folds')
+
+    avgs = []
     for fold, _ in enumerate(stacked_values):
-        ax[1].plot(iterations, stacked_values[fold], label=f'Fold {fold+1}')
+        avg_scores = np.mean(stacked_values[fold], axis=0)
+        avgs.append(avg_scores)
+        ax[1].plot(iterations, stacked_values[fold], label=f'Fold {fold+1}: {avg_scores:.3f}')
     ax[1].set_xlabel('Image number (one epoch)')
-    ax[1].set_ylabel('Average loss')
+    ax[1].set_ylabel(f'Average {val_type}')
     ax[1].legend()
-    plt.suptitle('Loss for all folds, each value is average over all slices of image i')
+
+    plt.suptitle(f'Average {val_type} over all folds: {np.mean(avgs):.3f}')
+    plt.tight_layout()
+    plt.savefig(f'./imgs/{val_type}_kfold.png')
     plt.show()
 
     # # Plot using min and max for error bars
@@ -63,24 +70,22 @@ def plot_values(values, title, xlabel, ylabel, show=True):
     if show:
         plt.show()
 
-def show_segmentation_metrics(metrics):
-    # Show loss plots
-    loss_epoch_0 = metrics['losses'][0]
-    plot_values(loss_epoch_0, 'Losses', 'Iterations', 'Loss')
+# def show_segmentation_metrics(metrics):
+#     # Show loss plots
+#     loss_epoch_0 = metrics['losses'][0]
+#     plot_values(loss_epoch_0, 'Losses', 'Iterations', 'Loss')
 
-    dice_epoch_0 = metrics['dice_scores'][0]
-    # Show dice plots
-    plot_values(dice_epoch_0, 'Dice scores', 'Iterations', 'Dice score')
+#     dice_epoch_0 = metrics['dice_scores'][0]
+#     # Show dice plots
+#     plot_values(dice_epoch_0, 'Dice scores', 'Iterations', 'Dice score')
 
-    hd_epoch_0 = metrics['hd_scores'][0]
-    # Show hausdorff plots
-    plot_values(hd_epoch_0, 'Hausdorff distances, skipping empty masks', 'Iterations', 'Hausdorff distance', show=False)
+#     hd_epoch_0 = metrics['hd_scores'][0]
+#     # Show hausdorff plots
+#     plot_values(hd_epoch_0, 'Hausdorff distances, skipping empty masks', 'Iterations', 'Hausdorff distance', show=False)
 
-    hd_full_epoch_0 = metrics['hd_scores_full'][0]
-    # Show hausdorff plots
-    plot_values(hd_full_epoch_0, 'Hausdorff distances, using nonzero for empty masks', 'Iterations', 'Hausdorff distance')
-
-    
+#     hd_full_epoch_0 = metrics['hd_scores_full'][0]
+#     # Show hausdorff plots
+#     plot_values(hd_full_epoch_0, 'Hausdorff distances, using nonzero for empty masks', 'Iterations', 'Hausdorff distance')
 
 
 def show_mask(data, ax, label_name=None):
@@ -126,28 +131,49 @@ def show_aggregate_masks(aggregate_masks, slice_idx, orig_mask):
 
 if __name__ == '__main__':
     import json
-    with open('metrics/unet2d.json', 'r') as f:
+    with open('metrics/unet2d-run2/unet2d.json', 'r') as f:
         unet2d_metrics = json.load(f)
-    
 
-    min_loss_len = min([len(v['losses']) for fold, v in unet2d_metrics.items()])
-    min_dice_len = min([len(v['dice_scores']) for fold, v in unet2d_metrics.items()])
-    min_hd_len = min([len(v['hd_scores']) for fold, v in unet2d_metrics.items()])
-    min_hd_full_len = min([len(v['hd_scores_full']) for fold, v in unet2d_metrics.items()])
+    min_tr_loss_len = min([len(v['tr_losses']) for fold, v in unet2d_metrics.items()])
+    min_tr_dice_len = min([len(v['tr_dice_scores']) for fold, v in unet2d_metrics.items()])
+    # min_tr_hd_len = min([len(v['tr_hd_scores']) for fold, v in unet2d_metrics.items()])
+    min_tr_hd_full_len = min([len(v['tr_hd_scores_full']) for fold, v in unet2d_metrics.items()])
+
+    min_te_dice_len = min([len(v['te_dice_scores']) for fold, v in unet2d_metrics.items()])
+    # min_te_hd_len = min([len(v['te_hd_scores']) for fold, v in unet2d_metrics.items()])
+    min_te_hd_full_len = min([len(v['te_hd_scores_full']) for fold, v in unet2d_metrics.items()])
 
     # Truncate all lists to min length
     for fold, v in unet2d_metrics.items():
-        v['losses'] = v['losses'][:min_loss_len]
-        v['dice_scores'] = v['dice_scores'][:min_dice_len]
-        v['hd_scores'] = v['hd_scores'][:min_hd_len]
-        v['hd_scores_full'] = v['hd_scores_full'][:min_hd_full_len]
+        v['tr_losses'] = v['tr_losses'][:min_tr_loss_len]
+        v['tr_dice_scores'] = v['tr_dice_scores'][:min_tr_dice_len]
+        # v['tr_hd_scores'] = v['tr_hd_scores'][:min_tr_hd_len]
+        v['tr_hd_scores_full'] = v['tr_hd_scores_full'][:min_tr_hd_full_len]
+
+        v['te_dice_scores'] = v['te_dice_scores'][:min_te_dice_len]
+        # v['te_hd_scores'] = v['te_hd_scores'][:min_te_hd_len]
+        v['te_hd_scores_full'] = v['te_hd_scores_full'][:min_te_hd_full_len]
 
     # Convert string key to int key
     metrics = {int(k): v for k, v in unet2d_metrics.items()}
 
     # Compute average loss per image for each fold. Each list corresponds to one image
-    stacked_losses = np.vstack([np.mean(np.array(v['losses']), axis=1) for _, v in metrics.items()])
-    show_kfold_plots(stacked_losses)
+    stacked_losses = np.vstack([np.mean(np.array(v['tr_losses']), axis=1) for _, v in metrics.items()])
+    show_kfold_plots(stacked_losses, 'training loss')
 
-    stacked_dice = np.vstack([np.mean(np.array(v['dice_scores']), axis=1) for _, v in metrics.items()])
-    show_kfold_plots(stacked_dice, 'dice')
+    stacked_dice = np.vstack([np.mean(np.array(v['tr_dice_scores']), axis=1) for _, v in metrics.items()])
+    show_kfold_plots(stacked_dice, 'training dice')
+
+    # Compute average loss per image for each fold. Each list corresponds to one image
+    stacked_test_dice = np.vstack([np.array(v['te_dice_scores']) for _, v in metrics.items()])
+    show_kfold_plots(stacked_test_dice, 'test dice')
+
+    # print([len(v['tr_hd_scores'][0]) for _, v in metrics.items()])
+    stacked_hd = np.vstack([np.mean(np.array(v['tr_hd_scores_full']), axis=1) for _, v in metrics.items()])
+    # print(stacked_hd.shape)
+    show_kfold_plots(stacked_hd, 'training hd')
+
+    # Compute average loss per image for each fold. Each list corresponds to one image
+    stacked_test_hd = np.vstack([np.array(v['te_hd_scores_full']) for _, v in metrics.items()])
+    show_kfold_plots(stacked_test_hd, 'test hd')
+

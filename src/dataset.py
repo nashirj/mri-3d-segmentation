@@ -46,10 +46,9 @@ class BratsDataset(torch.utils.data.Dataset):
         image = preprocess.load_stacked_mri_img(img_name)
         raw_mask = preprocess.load_mask(label_name)
         mask = preprocess.get_masks(raw_mask)
-        
         image = preprocess.normalize_img(image)
 
-        return image, mask
+        return torch.from_numpy(image).float(), torch.from_numpy(mask).float()
 
 
 def load_brats():

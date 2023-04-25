@@ -5,24 +5,24 @@ import torch
 from src import viz, preprocess
 
 
-def evaluate_model(testloader, network):
-    # Evaluation for this fold
-    correct, total = 0, 0
-    with torch.no_grad():
-        # Iterate over the test data and generate predictions
-        for i, data in enumerate(testloader, 0):
-            # Get inputs
-            inputs, targets = data
+# def evaluate_model(testloader, network):
+#     # Evaluation for this fold
+#     correct, total = 0, 0
+#     with torch.no_grad():
+#         # Iterate over the test data and generate predictions
+#         for i, data in enumerate(testloader, 0):
+#             # Get inputs
+#             inputs, targets = data
 
-            # Generate outputs
-            outputs = network(inputs)
+#             # Generate outputs
+#             outputs = network(inputs)
 
-            # Set total and correct
-            _, predicted = torch.max(outputs.data, 1)
-            total += targets.size(0)
-            correct += (predicted == targets).sum().item()
+#             # Set total and correct
+#             _, predicted = torch.max(outputs.data, 1)
+#             total += targets.size(0)
+#             correct += (predicted == targets).sum().item()
 
-    return correct, total
+#     return correct, total
 
 
 def evaluate_kfold_metrics(k_folds, metrics):
@@ -86,6 +86,63 @@ def compute_dice_and_hd(y_pred, y_true):
     return dice, hd(flat_pred, flat_true), skip_hd
 
 
+def evaluate_model(model, test_dl, device):
+    # tc_dices = []
+    # wt_dices = []
+    # et_dices = []
+    dice_scores = []
+    hd_scores = []
+    hd_scores_full = []
+    for img_num, data in enumerate(test_dl):
+        if img_num % 10 == 0:
+            print(f'Processing image {img_num + 1}...')
+        img, mask = data[0].to(device), data[1].to(device)
+
+        output_mask = []
+        for i in range(img.shape[4]):
+            # Get the current slice
+            input_slice = img[:, :, :, :, i]
+            target_slice = mask[:, :, :, :, i]
+
+            # Perform forward pass
+            output_logits = model(input_slice)
+
+            output_slice = output_logits.detach().cpu().numpy().squeeze(0)
+            output_slice = preprocess.binarize_mask(output_slice)
+
+            output_mask.append(output_slice)
+
+        # Convert to numpy array with shape (3, 240, 240, 155)
+        output_mask = np.array(output_mask).transpose(1, 2, 3, 0)
+        output_mask = preprocess.binarize_mask(output_mask)
+
+        mask = mask.detach().cpu().numpy()
+
+        # tc_dice = dc(output_mask[constants.TC, :, :, :], mask[constants.TC, :, :, :])
+        # wt_dice = dc(output_mask[constants.WT, :, :, :], mask[constants.WT, :, :, :])
+        # et_dice = dc(output_mask[constants.ET, :, :, :], mask[constants.ET, :, :, :])
+        overall_dice, hd, num_nonzero = compute_dice_and_hd(output_mask, mask)
+
+        # tc_dices.append(tc_dice)
+        # wt_dices.append(wt_dice)
+        # et_dices.append(et_dice)
+        dice_scores.append(overall_dice)
+        if num_nonzero is None:
+            hd_scores.append(hd)
+            hd_scores_full.append(hd)
+        else:
+            hd_scores_full.append(num_nonzero)
+
+    return {
+        # 'tc_dices': tc_dices,
+        # 'wt_dices': wt_dices,
+        # 'et_dices': et_dices,
+        'te_dice_scores': dice_scores,
+        'te_hd_scores': hd_scores,
+        'te_hd_scores_full': hd_scores_full
+    }
+
+
 if __name__ == '__main__':
     # import json
 
@@ -137,4 +194,3 @@ if __name__ == '__main__':
     seg = np.ones((100,100,100), dtype='int')
     gt = np.zeros((100,100, 100), dtype='int')
     print(compute_dice_and_hd(seg, gt))
-
